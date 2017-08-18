@@ -18,16 +18,12 @@ unsigned long Time = 0;
 #include <Wire.h>
 #include "RTClib.h"
 #include <SoftwareSerial.h>
+#include <avr/wdt.h>
+
 
 SoftwareSerial mySerial(2, 6);
 
 OneWire  ds(A0);  // on pin 8 (a 4.7K resistor is necessary)
-
-//#if defined(ARDUINO_ARCH_SAMD)
-// for Zero, output on USB Serial console, remove line below if using programming port to program the Zero!
-//   #define Serial SerialUSB
-//#endif
-
 
 File myFile;
 
@@ -45,7 +41,6 @@ unsigned char HigherTempLimit = 0, LowerTempLimit = 0;
 String AlarmON = "1", LockEnabled = "1";
 unsigned char UpdateRate = 10, DeviceLevel = 0;
 unsigned long TempTimer = 0;
-//SoftwareSerial mySerial(2, 3);
 
 const int chipSelect = 9;  //Chip select for SD card
 //  byte i;
@@ -75,130 +70,92 @@ void setup(){
 
     delay(1000);
     pinMode(Buzzer,OUTPUT);
-    //NotRegistered();
     pinMode(LockPin,OUTPUT);
     pinMode(LimitSwitch,INPUT_PULLUP);
     digitalWrite(Buzzer,LOW);
-   
-//    Serial2.println("Initializing SD card...");
+    wdt_enable(WDTO_8S);
     Serial.print("Initializing SD card...");                                                      
    
     pinMode(10, OUTPUT);                                                          // must initialize the hardware SS pin as output eventhough it is not using.
     while(!SD.begin(chipSelect));                                                 // initialize the SD card 
     delay(10);                                        // initialize the SD card 
     Serial.println(F("card initialized."));
-    if(SD.exists("MyDetails.txt")){
-        myFile = SD.open("MyDetails.txt");
-        int i = 0;
-        String MyDetails[6];
-        char TempData;
-        while(myFile.available()){
-            TempData = char(myFile.read());
-            if(TempData == ','){
-                i++;
-            }
-            else{
-                MyDetails[i]+=TempData;
-            }
-        }
-//      DeviceName = MyDetails[0];
-        DeviceLevel = MyDetails[1].toInt();
-        UpdateRate = MyDetails[2].toInt();
-        HigherTempLimit = MyDetails[3].toInt();
-        LowerTempLimit = MyDetails[4].toInt();
-        AlarmON = MyDetails[5];
-        myFile.close();
-    }
-    else{
-        myFile = SD.open("MyDetails.txt", FILE_WRITE);
-        myFile.print(DeviceName);
-        myFile.print(",1,10,10,3,0");
-//      DeviceName = "No_Name";
-        UpdateRate = 10;
-        HigherTempLimit = 10;
-        LowerTempLimit = 3;
-        AlarmON = "0";
-        myFile.close();
-      }
     Lock();
-//      delay(1000);
-
-//      UpdateDataInSDCard();
 }
 
 void loop(){
-  i=0;
-   CurrentTime = rtc.now();
-   while(!mySerial.available()){
-     if(Serial.available())
-      ProcessIncomingData(Serial.readString());
-        CurrentTime = rtc.now();
-        if(CurrentTime.second() % UpdateRate == 0){
-        if(IsUSBConnected()){
-          Serial.println(PackageLogData());
-          UpdateDataInSDCard();  
-      }
-        else{
-         LogDataToCard(PackageLogData());
-         Serial.println(F("Writing to Card"));
-        }
-      }
-
-        CurrentTime = rtc.now();
-        //if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
-        if(CurrentTime.second() % UpdateRate == 0){
-        if(IsUSBConnected()){
-//          Serial2.print(PackageLogData());
-          Serial.println(PackageLogData());
-          UpdateDataInSDCard();  
-      }
-        else{
-        //Serial.println("Reached Here1");
-          LogDataToCard(PackageLogData());
-         Serial.println(F("Writing to Card"));
-        }
-      }
+Lock();
+wdt_reset();
+i=0;
+CurrentTime = rtc.now();
+while(!mySerial.available()){
+ if(Serial.available())
+ ProcessIncomingData(Serial.readString());
+ CurrentTime = rtc.now();
+ if(CurrentTime.second() % UpdateRate == 0){
+   if(IsUSBConnected()){
+     Serial.println(PackageLogData());
+     UpdateDataInSDCard();  
+    }
+    else{
+       LogDataToCard(PackageLogData());
+       Serial.println(F("Writing to Card"));
+    }
+  }
+  CurrentTime = rtc.now();
+  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
+  //if(CurrentTime.second() % UpdateRate == 0){
+  if(IsUSBConnected()){
+    Serial.println(PackageLogData());
+    UpdateDataInSDCard();  
+  }
+  else{
+    LogDataToCard(PackageLogData());
+    Serial.println(F("Writing to Card"));
+  }
 }
-   if(mySerial.available()){
-         InputDataString += mySerial.readString();
-         bool AdminLoggedIn = true;
-         if(!InputDataString.equals(Admin_ID_String))
-           AdminLoggedIn = false;
-       if(AdminLoggedIn){
-         InputDataString = "admin       ";
-         OpenDoor();
-       }
-       else{
-       String RFID_Tags;
-          myFile = SD.open("RFID.txt.txt");
-          if(myFile){
-              while(myFile.available()){
-                RFID_Tags += char(myFile.read());
-              }
-           bool Registered_User = false;
-           for( i = 0; i <= RFID_Tags.length() - InputDataString.length(); i++){
-             if(RFID_Tags.substring(i,InputDataString.length() + i) == InputDataString){
-               Registered_User = true;
-             }
-           }
-         if(Registered_User){
-           OpenDoor();
-         }
-         else{
-           DontOpenDoor();
-         }
-       }
-       myFile.close();
-       }
-       if(IsUSBConnected()){
-         delay(1000);
-         Serial.println(PackageAccessData());
-       }
-       else{
-         Serial.println(F("Writing to Card"));
-         LogAccessDataToCard(PackageAccessData());
-       }
-      InputDataString = "";
+}
+
+if(mySerial.available()){
+  InputDataString += mySerial.readString();
+  bool AdminLoggedIn = true;
+  if(!InputDataString.equals(Admin_ID_String))
+    AdminLoggedIn = false;
+  if(AdminLoggedIn){
+    InputDataString = "admin       ";
+    OpenDoor();
+  }
+  else{
+    String RFID_Tags;
+    myFile = SD.open("RFID.txt.txt");
+    if(myFile){
+      while(myFile.available()){
+      RFID_Tags += char(myFile.read());
+    }
+    bool Registered_User = false;
+    for( i = 0; i <= RFID_Tags.length() - InputDataString.length(); i++){
+      if(RFID_Tags.substring(i,InputDataString.length() + i) == InputDataString){
+        Registered_User = true;
+      }
+    }
+    if(Registered_User){
+      OpenDoor();
+    }
+    else{
+      DontOpenDoor();
+    }
+   }
+ myFile.close();
+ }
+ if(IsUSBConnected()){
+   delay(1000);
+   Serial.println(PackageAccessData());
+ }
+ else{
+   Serial.println(F("Writing to Card"));
+   LogAccessDataToCard(PackageAccessData());
+ }
+ InputDataString = "";
 }
 }
 
@@ -219,6 +176,7 @@ void ProcessIncomingData(String IncomingData){
     delay(1000);
     digitalWrite(Buzzer,LOW);
   }
+  wdt_reset();
 }
 
 String PackageLogData(){
@@ -282,6 +240,7 @@ bool IsUSBConnected(){
     unsigned long CurrentMillisCount = millis();
     Serial.println(F("*,00001;"));
     while((!Serial.available()) && ((millis() - CurrentMillisCount) < 3000));
+    wdt_reset();
     if(Serial.available()){
       String TempSerialData = Serial.readString();
         if(TempSerialData.startsWith("^,00001;")){
@@ -315,6 +274,7 @@ void UpdateDataInSDCard(){
                 PrepareData1 += char(';');
 //                if(IsUSBConnected())
                   Serial.println(PrepareData1);
+                  wdt_reset();
                   delay(20);  
 //              
               }
@@ -326,21 +286,23 @@ void UpdateDataInSDCard(){
             Serial.println(F("File Unavailable"));
             }
      }
+  wdt_reset();
 }
 
 void LogDataToCard(String PrintToFile){
-    //Serial.println(F("Reached Here2"));
     while(!(myFile = SD.open("DataLog1.txt", FILE_WRITE)));                       // open/create a file sensor.txt
     //myFile = SD.open("DataLog1.txt", FILE_WRITE);
         myFile.print(PrintToFile);
     myFile.close();
+  wdt_reset();
 }
 
 void LogAccessDataToCard(String PrintToFile){
-    //while(!(myFile = SD.open("DataLog1.txt", FILE_WRITE)));
-    myFile = SD.open("DataLog1.txt", FILE_WRITE);      
+    while(!(myFile = SD.open("DataLog1.txt", FILE_WRITE)));
+    //myFile = SD.open("DataLog1.txt", FILE_WRITE);      
         myFile.print(PrintToFile);
     myFile.close();
+  wdt_reset();
 }
 
 void LogRFIDCard(String PrintToFile){
@@ -348,6 +310,7 @@ void LogRFIDCard(String PrintToFile){
     //myFile = SD.open("RFID.txt", FILE_WRITE);
         myFile.print(PrintToFile + ";");
     myFile.close();
+  wdt_reset();
 }
 
 float ReadTemperature(){
@@ -403,6 +366,7 @@ float ReadTemperature(){
 
 void OpenDoor(){
   UnLock();
+  wdt_reset();
   digitalWrite(Buzzer,HIGH);
   delay(100);
   digitalWrite(Buzzer,LOW);
@@ -410,15 +374,17 @@ void OpenDoor(){
   digitalWrite(Buzzer,HIGH);
   delay(100);
   digitalWrite(Buzzer,LOW);
-  delay(5000);
+  wdt_reset();
+  delay(4000);
   Lock();
+  wdt_reset();
 }
 
 void Lock(){
-  //if(!digitalRead(LimitSwitch))
+  if(digitalRead(LimitSwitch))
     digitalWrite(LockPin,HIGH);
-  //else
-  //  digitalWrite(LockPin,LOW);
+  else
+    digitalWrite(LockPin,LOW);
 }
 
 void UnLock(){
