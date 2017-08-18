@@ -1,3 +1,5 @@
+// Original File
+
 String InputDataString = "";
 String Admin_ID_String = "4F00BE58359C";
 unsigned char i = 0;
@@ -73,7 +75,7 @@ void setup(){
 
     delay(1000);
     pinMode(Buzzer,OUTPUT);
-    NotRegistered();
+    //NotRegistered();
     pinMode(LockPin,OUTPUT);
     pinMode(LimitSwitch,INPUT_PULLUP);
     digitalWrite(Buzzer,LOW);
@@ -84,7 +86,7 @@ void setup(){
     pinMode(10, OUTPUT);                                                          // must initialize the hardware SS pin as output eventhough it is not using.
     while(!SD.begin(chipSelect));                                                 // initialize the SD card 
     delay(10);                                        // initialize the SD card 
-    Serial.println("card initialized.");
+    Serial.println(F("card initialized."));
     if(SD.exists("MyDetails.txt")){
         myFile = SD.open("MyDetails.txt");
         int i = 0;
@@ -118,6 +120,7 @@ void setup(){
         AlarmON = "0";
         myFile.close();
       }
+    Lock();
 //      delay(1000);
 
 //      UpdateDataInSDCard();
@@ -140,7 +143,7 @@ void loop(){
          i++;
        }
        if(RecievingData[0].equals("@") && EndOfLine == 1 && RecievingData[1].equals(DeviceName)){
-         Serial.print("Device Data Updated;");
+         Serial.print(F("Device Data Updated;"));
          String UpdateDetails = "";
            UpdateDetails += DeviceName;
            UpdateDetails += ",";
@@ -171,46 +174,46 @@ void loop(){
            EndOfLine = 0;
            i=0;
        }
-       else if(RecievingData[0].equals("O") && EndOfLine == 1){
+       else if(RecievingData[0].equals("00001")){
+        Serial.println(F("Data detected"));
+       if(RecievingData[1].equals("O") && EndOfLine == 1){
            OpenDoor();
            for(i = 0; i < 5; i++)
              RecievingData[i] = "";    
            EndOfLine = 0;
            i=0;
        }
-       else if(RecievingData[0].equals("X") && EndOfLine == 1){
+       else if(RecievingData[1].equals("X") && EndOfLine == 1){
            DontOpenDoor();
            for(i = 0; i < 5; i++)
              RecievingData[i] = "";
            EndOfLine = 0;
            i=0;
        }
-       else if(RecievingData[0].equals("N") && EndOfLine == 1){
+       else if(RecievingData[1].equals("N") && EndOfLine == 1){
            NotRegistered();
            for(i = 0; i < 5; i++)
              RecievingData[i] = "";
            EndOfLine = 0;
            i=0;
        }
-       else if(RecievingData[0].equals("&") && EndOfLine == 1){
-           LogRFIDCard(RecievingData[1]);
-           for(i = 0; i < 5; i++)
-             RecievingData[i] = "";
-           EndOfLine = 0;
-           i=0;
+       else if(RecievingData[1].equals("H") && EndOfLine == 1){
+            digitalWrite(Buzzer,HIGH);
+            delay(1000);
+            digitalWrite(Buzzer,LOW); 
        }
-       
+       }
         CurrentTime = rtc.now();
         //if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
         if(CurrentTime.second() % UpdateRate == 0){
         if(IsUSBConnected()){
-        Serial.println("Reached Here1");
+        //Serial.println(F("Reached Here1"));
           Serial.println(PackageLogData());
           UpdateDataInSDCard();  
       }
         else{
          LogDataToCard(PackageLogData());
-         Serial.println("Writing to Card");
+         Serial.println(F("Writing to Card"));
         }
       }
 }
@@ -223,9 +226,9 @@ void loop(){
           UpdateDataInSDCard();  
       }
         else{
-        Serial.println("Reached Here1");
+        //Serial.println("Reached Here1");
           LogDataToCard(PackageLogData());
-         Serial.println("Writing to Card");
+         Serial.println(F("Writing to Card"));
         }
       }
 }
@@ -265,7 +268,7 @@ void loop(){
          Serial.println(PackageAccessData());
        }
        else{
-         Serial.println("Writing to Card");
+         Serial.println(F("Writing to Card"));
          LogAccessDataToCard(PackageAccessData());
        }
       InputDataString = "";
@@ -331,10 +334,8 @@ String PackageCurrentTime_Access(){
 
 bool IsUSBConnected(){
     unsigned long CurrentMillisCount = millis();
-    Serial.println("*,00001;");
-    while((!Serial.available()) && ((millis() - CurrentMillisCount) < 3000))
-      Serial.println("Waiting");
-    Serial.println("Wait Finished");
+    Serial.println(F("*,00001;"));
+    while((!Serial.available()) && ((millis() - CurrentMillisCount) < 3000));
     if(Serial.available()){
       String TempSerialData = Serial.readString();
         if(TempSerialData.startsWith("^,00001;")){
@@ -357,7 +358,7 @@ bool IsUSBConnected(){
 
 void UpdateDataInSDCard(){
       if(SD.exists("DataLog1.txt")){
-          Serial.println("Log data needs to be updated;");
+          Serial.println(F("Log data needs to be updated;"));
           SDCardWriteCount = 0;
           myFile = SD.open("DataLog1.txt");
           delay(1000);
@@ -381,15 +382,15 @@ void UpdateDataInSDCard(){
               delay(1);
           }
           else{
-            Serial.println("File Unavailable");
+            Serial.println(F("File Unavailable"));
             }
      }
 }
 
 void LogDataToCard(String PrintToFile){
-    Serial.println("Reached Here2");
-    //while(!(myFile = SD.open("DataLog1.txt", FILE_WRITE)));                       // open/create a file sensor.txt
-    myFile = SD.open("DataLog1.txt", FILE_WRITE);
+    //Serial.println(F("Reached Here2"));
+    while(!(myFile = SD.open("DataLog1.txt", FILE_WRITE)));                       // open/create a file sensor.txt
+    //myFile = SD.open("DataLog1.txt", FILE_WRITE);
         myFile.print(PrintToFile);
     myFile.close();
 }
@@ -402,8 +403,8 @@ void LogAccessDataToCard(String PrintToFile){
 }
 
 void LogRFIDCard(String PrintToFile){
-    //while(!(myFile = SD.open("RFID.txt", FILE_WRITE)));      
-    myFile = SD.open("RFID.txt", FILE_WRITE);
+    while(!(myFile = SD.open("RFID.txt", FILE_WRITE)));      
+    //myFile = SD.open("RFID.txt", FILE_WRITE);
         myFile.print(PrintToFile + ";");
     myFile.close();
 }
@@ -473,14 +474,14 @@ void OpenDoor(){
 }
 
 void Lock(){
-  if(!digitalRead(LimitSwitch))
+  //if(!digitalRead(LimitSwitch))
     digitalWrite(LockPin,HIGH);
-  else
-    digitalWrite(LockPin,LOW);
+  //else
+  //  digitalWrite(LockPin,LOW);
 }
 
 void UnLock(){
-  if(!digitalRead(LimitSwitch))
+  //if(!digitalRead(LimitSwitch))
   digitalWrite(LockPin,LOW);
   digitalWrite(Buzzer,HIGH);
   delay(100);
