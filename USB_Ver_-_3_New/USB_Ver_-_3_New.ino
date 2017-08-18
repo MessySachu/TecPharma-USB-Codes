@@ -130,84 +130,11 @@ void loop(){
   i=0;
    CurrentTime = rtc.now();
    while(!mySerial.available()){
-      if(Serial.available() && EndOfLine == 0){
-       Temp = Serial.read();
-       if(Temp != ',' && Temp != ';'){
-             RecievingData[i].concat(char(Temp));
-         }
-       else if(Temp == ';'){
-             EndOfLine = 1;  
-             i = 0;
-         }
-       else{ 
-         i++;
-       }
-       if(RecievingData[0].equals("@") && EndOfLine == 1 && RecievingData[1].equals(DeviceName)){
-         Serial.print(F("Device Data Updated;"));
-         String UpdateDetails = "";
-           UpdateDetails += DeviceName;
-           UpdateDetails += ",";
-           DeviceLevel = RecievingData[2].toInt();
-           UpdateDetails += RecievingData[2];
-           UpdateDetails += ",";
-           HigherTempLimit = RecievingData[3].toInt();
-           UpdateDetails += RecievingData[3];
-           UpdateDetails += ",";
-           LowerTempLimit = RecievingData[4].toInt();
-           UpdateDetails += RecievingData[4];
-           UpdateDetails += ",";
-           AlarmON = RecievingData[5];
-           UpdateDetails += RecievingData[5];
-           UpdateDetails += ",";
-           LockEnabled = RecievingData[6];
-           UpdateDetails += RecievingData[6];
-           UpdateDetails += ",";
-           UpdateRate = RecievingData[7].toInt();
-           UpdateDetails += RecievingData[7];
-           SD.remove("MyDetails.txt");
-           File DetailsLogFile = SD.open("MyDetails.txt", FILE_WRITE);
-           DetailsLogFile.print(UpdateDetails);
-           DetailsLogFile.close();
-           
-           for(i = 0; i < 7; i++)
-             RecievingData[i] = "";
-           EndOfLine = 0;
-           i=0;
-       }
-       else if(RecievingData[0].equals("00001")){
-        Serial.println(F("Data detected"));
-       if(RecievingData[1].equals("O") && EndOfLine == 1){
-           OpenDoor();
-           for(i = 0; i < 5; i++)
-             RecievingData[i] = "";    
-           EndOfLine = 0;
-           i=0;
-       }
-       else if(RecievingData[1].equals("X") && EndOfLine == 1){
-           DontOpenDoor();
-           for(i = 0; i < 5; i++)
-             RecievingData[i] = "";
-           EndOfLine = 0;
-           i=0;
-       }
-       else if(RecievingData[1].equals("N") && EndOfLine == 1){
-           NotRegistered();
-           for(i = 0; i < 5; i++)
-             RecievingData[i] = "";
-           EndOfLine = 0;
-           i=0;
-       }
-       else if(RecievingData[1].equals("H") && EndOfLine == 1){
-            digitalWrite(Buzzer,HIGH);
-            delay(1000);
-            digitalWrite(Buzzer,LOW); 
-       }
-       }
+     if(Serial.available())
+      ProcessIncomingData(Serial.readString());
         CurrentTime = rtc.now();
-        //if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
         if(CurrentTime.second() % UpdateRate == 0){
         if(IsUSBConnected()){
-        //Serial.println(F("Reached Here1"));
           Serial.println(PackageLogData());
           UpdateDataInSDCard();  
       }
@@ -216,7 +143,7 @@ void loop(){
          Serial.println(F("Writing to Card"));
         }
       }
-}
+
         CurrentTime = rtc.now();
         //if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
         if(CurrentTime.second() % UpdateRate == 0){
@@ -273,6 +200,25 @@ void loop(){
        }
       InputDataString = "";
 }
+}
+
+void ProcessIncomingData(String IncomingData){
+  Serial.print("Data to Fridge: ");
+  Serial.println(IncomingData);
+  if(IncomingData.startsWith("00001,O;")){
+    OpenDoor();
+  }
+  else if(IncomingData.startsWith("00001,X;")){
+    DontOpenDoor();
+  }
+  else if(IncomingData.startsWith("00001,N;")){
+    NotRegistered();
+  }
+  else if(IncomingData.startsWith("00001,H;")){
+    digitalWrite(Buzzer,HIGH);
+    delay(1000);
+    digitalWrite(Buzzer,LOW);
+  }
 }
 
 String PackageLogData(){
@@ -342,12 +288,7 @@ bool IsUSBConnected(){
             return true;
         }
         else{
-          if(TempSerialData.startsWith("O;")){
-            OpenDoor();
-          }
-          else if(TempSerialData.startsWith("X;")){
-            DontOpenDoor();
-          }
+            ProcessIncomingData(TempSerialData);
             return false;
           }
     }
