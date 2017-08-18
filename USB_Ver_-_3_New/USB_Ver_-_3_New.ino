@@ -27,7 +27,7 @@ OneWire  ds(A0);  // on pin 8 (a 4.7K resistor is necessary)
 
 File myFile;
 
-char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+//char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 
 unsigned int SDCardWriteCount = 0;
@@ -52,6 +52,11 @@ const int chipSelect = 9;  //Chip select for SD card
   DateTime CurrentTime;
   
 void setup(){
+    pinMode(Buzzer,OUTPUT);
+    pinMode(LockPin,OUTPUT);
+    pinMode(LimitSwitch,INPUT_PULLUP);
+    digitalWrite(Buzzer,LOW);
+    Lock();
     pinMode(RTC_Vcc,OUTPUT);
     pinMode(RTC_Gnd,OUTPUT);
 
@@ -69,10 +74,6 @@ void setup(){
     }
 
     delay(1000);
-    pinMode(Buzzer,OUTPUT);
-    pinMode(LockPin,OUTPUT);
-    pinMode(LimitSwitch,INPUT_PULLUP);
-    digitalWrite(Buzzer,LOW);
     wdt_enable(WDTO_8S);
     Serial.print("Initializing SD card...");                                                      
    
@@ -81,6 +82,7 @@ void setup(){
     delay(10);                                        // initialize the SD card 
     Serial.println(F("card initialized."));
     Lock();
+    wdt_reset();
 }
 
 void loop(){
@@ -89,10 +91,12 @@ wdt_reset();
 i=0;
 CurrentTime = rtc.now();
 while(!mySerial.available()){
+  wdt_reset();
  if(Serial.available())
  ProcessIncomingData(Serial.readString());
  CurrentTime = rtc.now();
- if(CurrentTime.second() % UpdateRate == 0){
+ //if(CurrentTime.second() % UpdateRate == 0){
+  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
    if(IsUSBConnected()){
      Serial.println(PackageLogData());
      UpdateDataInSDCard();  
@@ -117,6 +121,7 @@ while(!mySerial.available()){
 }
 
 if(mySerial.available()){
+  wdt_reset();
   InputDataString += mySerial.readString();
   bool AdminLoggedIn = true;
   if(!InputDataString.equals(Admin_ID_String))
@@ -160,8 +165,8 @@ if(mySerial.available()){
 }
 
 void ProcessIncomingData(String IncomingData){
-  Serial.print("Data to Fridge: ");
-  Serial.println(IncomingData);
+  //Serial.print("Data to Fridge: ");
+  //Serial.println(IncomingData);
   if(IncomingData.startsWith("00001,O;")){
     OpenDoor();
   }
@@ -257,35 +262,34 @@ bool IsUSBConnected(){
 }
 
 void UpdateDataInSDCard(){
-      if(SD.exists("DataLog1.txt")){
-          Serial.println(F("Log data needs to be updated;"));
-          SDCardWriteCount = 0;
-          myFile = SD.open("DataLog1.txt");
-          delay(1000);
-          if(myFile.available()){
-              while(myFile.available()){
-                String PrepareData1;
-                char TempCollector;
-                TempCollector = char(myFile.read());
-                while(TempCollector != ';'){
-                  PrepareData1 += char(TempCollector);
-                  TempCollector = char(myFile.read());
-                }
-                PrepareData1 += char(';');
-//                if(IsUSBConnected())
-                  Serial.println(PrepareData1);
-                  wdt_reset();
-                  delay(20);  
-//              
-              }
-              myFile.close();
-              SD.remove("DataLog1.txt");
-              delay(1);
+if(SD.exists("DataLog1.txt")){
+    Serial.println(F("Log data needs to be updated;"));
+    SDCardWriteCount = 0;
+    myFile = SD.open("DataLog1.txt");
+    delay(1000);
+    if(myFile.available()){
+        while(myFile.available()){
+          String PrepareData1;
+          char TempCollector;
+          TempCollector = char(myFile.read());
+          while(TempCollector != ';'){
+            PrepareData1 += char(TempCollector);
+            TempCollector = char(myFile.read());
           }
-          else{
-            Serial.println(F("File Unavailable"));
-            }
-     }
+          PrepareData1 += char(';');
+//        if(IsUSBConnected())
+          Serial.println(PrepareData1);
+          wdt_reset();
+          delay(20);
+        }
+        myFile.close();
+        SD.remove("DataLog1.txt");
+        delay(1);
+    }
+    else{
+      Serial.println(F("File Unavailable"));
+      }
+}
   wdt_reset();
 }
 
