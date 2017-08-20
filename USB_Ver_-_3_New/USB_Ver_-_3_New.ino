@@ -91,6 +91,7 @@ wdt_reset();
 i=0;
 CurrentTime = rtc.now();
 while(!mySerial.available()){
+  Lock();
   wdt_reset();
  if(Serial.available())
  ProcessIncomingData(Serial.readString());
@@ -121,8 +122,11 @@ while(!mySerial.available()){
 }
 
 if(mySerial.available()){
+  digitalWrite(Buzzer,HIGH);
+  delay(100);
+  digitalWrite(Buzzer,LOW);
   wdt_reset();
-  InputDataString += mySerial.readString();
+  InputDataString = mySerial.readString();
   bool AdminLoggedIn = true;
   if(!InputDataString.equals(Admin_ID_String))
     AdminLoggedIn = false;
@@ -130,30 +134,30 @@ if(mySerial.available()){
     InputDataString = "admin       ";
     OpenDoor();
   }
-  else{
-    String RFID_Tags;
-    myFile = SD.open("RFID.txt.txt");
-    if(myFile){
-      while(myFile.available()){
-      RFID_Tags += char(myFile.read());
-    }
-    bool Registered_User = false;
-    for( i = 0; i <= RFID_Tags.length() - InputDataString.length(); i++){
-      if(RFID_Tags.substring(i,InputDataString.length() + i) == InputDataString){
-        Registered_User = true;
-      }
-    }
-    if(Registered_User){
-      OpenDoor();
-    }
-    else{
-      DontOpenDoor();
-    }
-   }
- myFile.close();
- }
+//  else{
+//    String RFID_Tags;
+//    myFile = SD.open("RFID.txt.txt");
+//    if(myFile){
+//      while(myFile.available()){
+//      RFID_Tags += char(myFile.read());
+//    }
+//    bool Registered_User = false;
+//    for( i = 0; i <= RFID_Tags.length() - InputDataString.length(); i++){
+//      if(RFID_Tags.substring(i,InputDataString.length() + i) == InputDataString){
+//        Registered_User = true;
+//      }
+//    }
+//    if(Registered_User){
+//      OpenDoor();
+//    }
+//    else{
+//      DontOpenDoor();
+//    }
+//   }
+// myFile.close();
+// }
  if(IsUSBConnected()){
-   delay(1000);
+   delay(500);
    Serial.println(PackageAccessData());
  }
  else{
@@ -244,7 +248,7 @@ String PackageCurrentTime_Access(){
 bool IsUSBConnected(){
     unsigned long CurrentMillisCount = millis();
     Serial.println(F("*,00001;"));
-    while((!Serial.available()) && ((millis() - CurrentMillisCount) < 3000));
+    while((!Serial.available()) && ((millis() - CurrentMillisCount) < 1000));
     wdt_reset();
     if(Serial.available()){
       String TempSerialData = Serial.readString();
