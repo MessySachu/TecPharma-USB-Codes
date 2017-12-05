@@ -23,8 +23,8 @@ unsigned long Time = 0;
 
 SoftwareSerial mySerial(2, 6);
 
-OneWire  ds(A0);  // on pin 8 (a 4.7K resistor is necessary)
-OneWire  ds1(A1);
+OneWire  ds(8);  // on pin 8 (a 4.7K resistor is necessary)
+OneWire  ds1(9);
 
 File myFile;
 
@@ -34,7 +34,7 @@ File myFile;
 unsigned int SDCardWriteCount = 0;
 RTC_DS1307 rtc;
 
-String DeviceName = "00001";
+String DeviceName = "00002";
 String RecievingData[7];
 unsigned char Temp= 0;
 unsigned char EndOfLine = 0;
@@ -43,7 +43,7 @@ String AlarmON = "1", LockEnabled = "1";
 unsigned char UpdateRate = 10, DeviceLevel = 0;
 unsigned long TempTimer = 0;
 
-const int chipSelect = 9;  //Chip select for SD card
+#define chipSelect  A3  //Chip select for SD card
 //  byte i;
   byte present = 0;
   byte type_s;
@@ -56,7 +56,10 @@ void setup(){
     pinMode(Buzzer,OUTPUT);
     pinMode(LockPin,OUTPUT);
     pinMode(LimitSwitch,INPUT_PULLUP);
+    digitalWrite(Buzzer,HIGH);
+    delay(100);
     digitalWrite(Buzzer,LOW);
+   
     Lock();
     pinMode(RTC_Vcc,OUTPUT);
     pinMode(RTC_Gnd,OUTPUT);
@@ -97,8 +100,8 @@ while(!mySerial.available()){
  if(Serial.available())
  ProcessIncomingData(Serial.readString());
  CurrentTime = rtc.now();
- //if(CurrentTime.second() % UpdateRate == 0){
-  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
+ if(CurrentTime.second() % UpdateRate == 0){
+//  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
    if(IsUSBConnected()){
      Serial.println(PackageLogData());
      UpdateDataInSDCard();  
@@ -172,16 +175,16 @@ if(mySerial.available()){
 void ProcessIncomingData(String IncomingData){
   //Serial.print("Data to Fridge: ");
   //Serial.println(IncomingData);
-  if(IncomingData.startsWith("00001,O;")){
+  if(IncomingData.startsWith("00002,O;")){
     OpenDoor();
   }
-  else if(IncomingData.startsWith("00001,X;")){
+  else if(IncomingData.startsWith("00002,X;")){
     DontOpenDoor();
   }
-  else if(IncomingData.startsWith("00001,N;")){
+  else if(IncomingData.startsWith("00002,N;")){
     NotRegistered();
   }
-  else if(IncomingData.startsWith("00001,H;")){
+  else if(IncomingData.startsWith("00002,H;")){
     digitalWrite(Buzzer,HIGH);
     delay(1000);
     digitalWrite(Buzzer,LOW);
@@ -248,12 +251,12 @@ String PackageCurrentTime_Access(){
 
 bool IsUSBConnected(){
     unsigned long CurrentMillisCount = millis();
-    Serial.println(F("*,00001;"));
+    Serial.println(F("*,00002;"));
     while((!Serial.available()) && ((millis() - CurrentMillisCount) < 1000));
     wdt_reset();
     if(Serial.available()){
       String TempSerialData = Serial.readString();
-        if(TempSerialData.startsWith("^,00001;")){
+        if(TempSerialData.startsWith("^,00002;")){
             return true;
         }
         else{
@@ -374,7 +377,7 @@ float ReadTemperature(){
     else if (cfg == 0x40) raw = raw & ~1; // 11 bit res, 375 ms
     //// default is 12 bit resolution, 750 ms conversion time
   }
-  celsius = (float)raw / 16.0;
+  celsius = (float)((int)((float)raw / 16.0)*10)/10;  //To limit temperature to a single decimal
   return celsius;
 }
 

@@ -62,11 +62,11 @@ void setup(){
     Serial.begin(57600);
     delay(1000);  
 
-    if (! rtc.begin()) {
-    }
-    if (! rtc.isrunning()) {
-      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    }
+//    if (! rtc.begin()) {
+//    }
+//    if (! rtc.isrunning()) {
+//      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+//    }
 
     delay(1000);
     pinMode(Buzzer,OUTPUT);
