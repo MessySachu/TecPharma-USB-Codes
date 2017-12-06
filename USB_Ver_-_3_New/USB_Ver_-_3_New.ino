@@ -21,6 +21,8 @@ unsigned long Time = 0;
 #include <avr/wdt.h>
 
 
+String SettingsData;
+
 SoftwareSerial mySerial(2, 6);
 
 OneWire  ds(8);  // on pin 8 (a 4.7K resistor is necessary)
@@ -30,6 +32,7 @@ File myFile;
 
 //char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
+unsigned long PreviousMillis;
 
 unsigned int SDCardWriteCount = 0;
 RTC_DS1307 rtc;
@@ -38,10 +41,11 @@ String DeviceName = "00002";
 String RecievingData[7];
 unsigned char Temp= 0;
 unsigned char EndOfLine = 0;
-unsigned char HigherTempLimit = 0, LowerTempLimit = 0;
+unsigned char HigherTempLimit = 10, LowerTempLimit = 2;
 String AlarmON = "1", LockEnabled = "1";
 unsigned char UpdateRate = 10, DeviceLevel = 0;
 unsigned long TempTimer = 0;
+unsigned int DelayTime = 0;
 
 #define chipSelect  A3  //Chip select for SD card
 //  byte i;
@@ -85,6 +89,11 @@ void setup(){
     while(!SD.begin(chipSelect));                                                 // initialize the SD card 
     delay(10);                                        // initialize the SD card 
     Serial.println(F("card initialized."));
+    wdt_reset();
+    LoadSettings();
+    Serial.print(F("Update Rate: "));     Serial.println(UpdateRate);
+    Serial.print(F("High Temp Limit: ")); Serial.println(HigherTempLimit);
+    Serial.print(F("Low Temp Limit: ")); Serial.println(LowerTempLimit);
     Lock();
     wdt_reset();
 }
@@ -100,7 +109,11 @@ while(!mySerial.available()){
  if(Serial.available())
  ProcessIncomingData(Serial.readString());
  CurrentTime = rtc.now();
- if(CurrentTime.second() % UpdateRate == 0){
+// if(CurrentTime.second() % UpdateRate == 0){
+//if(AverageTemp() < HigherTempLimit && AverageTemp > LowerTempLimit)   DelayTime = UpdateRate;
+//else  DelayTime = 1;
+  if(millis() - PreviousMillis > (UpdateRate*1000)){
+    PreviousMillis = millis();
 //  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
    if(IsUSBConnected()){
      Serial.println(PackageLogData());
@@ -165,8 +178,8 @@ if(mySerial.available()){
    Serial.println(PackageAccessData());
  }
  else{
-   Serial.println(F("Writing to Card"));
-   LogAccessDataToCard(PackageAccessData());
+//   Serial.println(F("Writing to Card"));
+//   LogAccessDataToCard(PackageAccessData());
  }
  InputDataString = "";
 }
@@ -175,19 +188,36 @@ if(mySerial.available()){
 void ProcessIncomingData(String IncomingData){
   //Serial.print("Data to Fridge: ");
   //Serial.println(IncomingData);
-  if(IncomingData.startsWith("00002,O;")){
+  if(IncomingData.startsWith(DeviceName+",O;")){
     OpenDoor();
   }
-  else if(IncomingData.startsWith("00002,X;")){
+  else if(IncomingData.startsWith(DeviceName+",X;")){
     DontOpenDoor();
   }
-  else if(IncomingData.startsWith("00002,N;")){
+  else if(IncomingData.startsWith(DeviceName+",N;")){
     NotRegistered();
   }
-  else if(IncomingData.startsWith("00002,H;")){
+  else if(IncomingData.startsWith(DeviceName+",H;")){
     digitalWrite(Buzzer,HIGH);
     delay(1000);
     digitalWrite(Buzzer,LOW);
+  }
+  else if(IncomingData.startsWith(DeviceName+",@;")){
+    UpdateDataInSDCard();
+  }
+  else if(IncomingData.startsWith(DeviceName+",U")){    //00002,U,005,008,002;
+    //Serial.println(IncomingData.substring(11,14));
+    //UpdateRate = (IncomingData.substring(8,11).toInt());
+    SaveSettings(IncomingData);
+    String SplitString[5];
+    for(i = 0; i < 4; i++){
+      SplitString[i] = IncomingData.substring(0,IncomingData.indexOf(','));
+      IncomingData = IncomingData.substring(IncomingData.indexOf(',')+1);
+    }
+    SplitString[4] = IncomingData.substring(0,3);
+    UpdateRate = SplitString[2].toInt();
+    HigherTempLimit = SplitString[3].toInt();
+    LowerTempLimit = SplitString[4].toInt();
   }
   wdt_reset();
 }
@@ -251,12 +281,12 @@ String PackageCurrentTime_Access(){
 
 bool IsUSBConnected(){
     unsigned long CurrentMillisCount = millis();
-    Serial.println(F("*,00002;"));
+    Serial.println("*,"+DeviceName+";");
     while((!Serial.available()) && ((millis() - CurrentMillisCount) < 1000));
     wdt_reset();
     if(Serial.available()){
       String TempSerialData = Serial.readString();
-        if(TempSerialData.startsWith("^,00002;")){
+        if(TempSerialData.startsWith("^,"+DeviceName+";")){
             return true;
         }
         else{
@@ -267,6 +297,46 @@ bool IsUSBConnected(){
     else{
       return false;
     }
+}
+
+void LoadSettings(){
+  if(SD.exists("Settings.txt")){
+    myFile = SD.open("Settings.txt");
+    //delay(1000);
+    if(myFile.available()){
+          char TempCollector;
+          TempCollector = char(myFile.read());
+          while(TempCollector != ';'){
+            SettingsData += char(TempCollector);
+            TempCollector = char(myFile.read());
+          }
+          SettingsData += char(';');
+          Serial.println(SettingsData);
+
+          String SplitString[5];
+          for(i = 0; i < 4; i++){
+            SplitString[i] = SettingsData.substring(0,SettingsData.indexOf(','));
+            SettingsData = SettingsData.substring(SettingsData.indexOf(',')+1);
+          } 
+          SplitString[4] = SettingsData.substring(0,3);
+          UpdateRate = SplitString[2].toInt();
+          HigherTempLimit = SplitString[3].toInt();
+          LowerTempLimit = SplitString[4].toInt();
+
+          wdt_reset();
+          delay(20);Serial.println(F("Line 325"));
+        myFile.close();
+        delay(1000);
+        wdt_reset();
+    }
+    else{
+      Serial.println(F("File not available"));
+    }
+  }
+  else{
+    Serial.println(F("Settings file not found."));
+  }
+  wdt_reset();  
 }
 
 void UpdateDataInSDCard(){
@@ -298,6 +368,21 @@ if(SD.exists("DataLog1.txt")){
       Serial.println(F("File Unavailable"));
       }
 }
+  wdt_reset();
+}
+
+void SaveSettings(String Settings){
+//  00002,U,005,008,002;
+  if(SD.exists("Settings.txt")){ 
+    Serial.println(F("Settings File Exists"));  
+    wdt_reset();
+    SD.remove("Settings.txt");
+  }
+  delay(1000);
+    while(!(myFile = SD.open("Settings.txt", FILE_WRITE)));                       // open/create a file sensor.txt
+        myFile.print(Settings);
+    myFile.close();
+    Serial.println(F("Settings Saved!!"));
   wdt_reset();
 }
 
