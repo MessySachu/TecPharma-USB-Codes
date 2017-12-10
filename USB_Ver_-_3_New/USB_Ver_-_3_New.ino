@@ -110,9 +110,9 @@ while(!mySerial.available()){
  ProcessIncomingData(Serial.readString());
  CurrentTime = rtc.now();
 // if(CurrentTime.second() % UpdateRate == 0){
-//if(AverageTemp() < HigherTempLimit && AverageTemp > LowerTempLimit)   DelayTime = UpdateRate;
-//else  DelayTime = 1;
-  if(millis() - PreviousMillis > (UpdateRate*1000)){
+  if(AverageTemp() < HigherTempLimit && AverageTemp() > LowerTempLimit)   DelayTime = UpdateRate;
+  else  DelayTime = 1;
+  if(millis() - PreviousMillis > (DelayTime * 1000 * 60)){
     PreviousMillis = millis();
 //  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
    if(IsUSBConnected()){
@@ -218,6 +218,7 @@ void ProcessIncomingData(String IncomingData){
     UpdateRate = SplitString[2].toInt();
     HigherTempLimit = SplitString[3].toInt();
     LowerTempLimit = SplitString[4].toInt();
+    LowerTempLimit = constrain(LowerTempLimit,2,8);
   }
   wdt_reset();
 }
@@ -226,12 +227,30 @@ String PackageLogData(){
         String PrepareData;
         PrepareData = "!,";
         PrepareData += DeviceName;
-        PrepareData += ",";
-        PrepareData += ReadTemperature();
-        PrepareData += ",";
+        PrepareData += ","; 
+        PrepareData += AverageTemp();
+        PrepareData += ","; 
         PrepareData += PackageCurrentTime();
         PrepareData += ";";
         return PrepareData;
+}
+
+float CorrectedTemperature1(){
+  float Temperature;
+  do{
+      Temperature = ReadTemperature();
+      wdt_reset();
+    }while(Temperature < 0.0 || Temperature > 60.0);
+  return Temperature;
+}
+
+float CorrectedTemperature2(){
+  float Temperature;
+  do{
+      Temperature = ReadTemperature1();
+      wdt_reset();
+    }while(Temperature < 0.0 || Temperature > 60.0);
+  return Temperature;
 }
 
 String PackageAccessData(){
@@ -321,10 +340,11 @@ void LoadSettings(){
           SplitString[4] = SettingsData.substring(0,3);
           UpdateRate = SplitString[2].toInt();
           HigherTempLimit = SplitString[3].toInt();
-          LowerTempLimit = SplitString[4].toInt();
+          LowerTempLimit = SplitString[4].toInt();  
+          LowerTempLimit = constrain(LowerTempLimit,2,8);
 
           wdt_reset();
-          delay(20);Serial.println(F("Line 325"));
+          delay(20);
         myFile.close();
         delay(1000);
         wdt_reset();
@@ -411,7 +431,7 @@ void LogRFIDCard(String PrintToFile){
 }
 
 float AverageTemp(){    //Lets try this tomorrow!!
-  return ((ReadTemperature() + ReadTemperature1())/2);
+  return float((CorrectedTemperature1() + CorrectedTemperature2())/2.0F);
 }
 
 
@@ -462,7 +482,7 @@ float ReadTemperature(){
     else if (cfg == 0x40) raw = raw & ~1; // 11 bit res, 375 ms
     //// default is 12 bit resolution, 750 ms conversion time
   }
-  celsius = (float)((int)((float)raw / 16.0)*10)/10;  //To limit temperature to a single decimal
+  celsius = (float)raw / 16.0;
   return celsius;
 }
 
