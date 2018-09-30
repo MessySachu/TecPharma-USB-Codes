@@ -5,28 +5,28 @@ String Admin_ID_String = "4F00BE58359C";
 unsigned char i = 0;
 unsigned long Time = 0;
 
-#define RTC_Vcc A3
-#define RTC_Gnd A2
-
-#define Buzzer 5
-#define LockPin 4
-#define LimitSwitch 3
+#define Buzzer 36
+#define LockPin 35
+#define LimitSwitch 34
+#define Serial Serial1
+#define RSTPIN 33
+#define SSPIN 31
 
 #include <SPI.h>
 #include <SD.h>
 #include <OneWire.h>
 #include <Wire.h>
 #include "RTClib.h"
-#include <SoftwareSerial.h>
 #include <avr/wdt.h>
+#include <MFRC522.h>
 
+MFRC522 rfid(SSPIN, RSTPIN); // Instance of the class
 
 String SettingsData;
 
-SoftwareSerial mySerial(2, 6);
 
-OneWire  ds(8);  // on pin 8 (a 4.7K resistor is necessary)
-OneWire  ds1(9);
+OneWire  ds(23);  // on pin 8 (a 4.7K resistor is necessary)
+OneWire  ds1(24);
 
 File myFile;
 
@@ -35,9 +35,10 @@ File myFile;
 unsigned long PreviousMillis;
 
 unsigned int SDCardWriteCount = 0;
-RTC_DS1307 rtc;
 
-String DeviceName = "00002";
+RTC_DS3231 rtc;
+
+String DeviceName = "00009";
 String RecievingData[7];
 unsigned char Temp= 0;
 unsigned char EndOfLine = 0;
@@ -47,7 +48,7 @@ unsigned char UpdateRate = 10, DeviceLevel = 0;
 unsigned long TempTimer = 0;
 unsigned long DelayTime = 0;
 
-#define chipSelect  A3  //Chip select for SD card
+#define chipSelect  13  //Chip select for SD card
 //  byte i;
   byte present = 0;
   byte type_s;
@@ -55,111 +56,6 @@ unsigned long DelayTime = 0;
   byte addr[8];
   float celsius, fahrenheit;
   DateTime CurrentTime;
-  
-void setup(){
-    pinMode(Buzzer,OUTPUT);
-    pinMode(LockPin,OUTPUT);
-    pinMode(LimitSwitch,INPUT_PULLUP);
-    digitalWrite(Buzzer,HIGH);
-    delay(100);
-    digitalWrite(Buzzer,LOW);
-   
-    Lock();
-    pinMode(RTC_Vcc,OUTPUT);
-    pinMode(RTC_Gnd,OUTPUT);
-
-    digitalWrite(RTC_Vcc,HIGH);
-    digitalWrite(RTC_Gnd,LOW);
-
-    mySerial.begin(9600);
-    Serial.begin(1200);
-    delay(1000);  
-    if (! rtc.begin()) {
-    }
-
-    if (! rtc.isrunning()) {
-      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    }
-
-    delay(1000);
-    wdt_enable(WDTO_8S);
-    Serial.print("Initializing SD card...");                                                      
-   
-    pinMode(10, OUTPUT);                                                          // must initialize the hardware SS pin as output eventhough it is not using.
-    while(!SD.begin(chipSelect));                                                 // initialize the SD card 
-    delay(10);                                        // initialize the SD card 
-    Serial.println(F("card initialized."));
-    wdt_reset();
-    LoadSettings();
-    Serial.print(F("Update Rate: "));     Serial.println(UpdateRate);
-    Serial.print(F("High Temp Limit: ")); Serial.println(HigherTempLimit);
-    Serial.print(F("Low Temp Limit: ")); Serial.println(LowerTempLimit);
-    Lock();
-    wdt_reset();
-}
-
-void loop(){
-Lock();
-wdt_reset();
-i=0;
-//CurrentTime = rtc.now();
-while(!mySerial.available()){
-  Lock();
-  wdt_reset();
- if(Serial.available())
- ProcessIncomingData(Serial.readString());
- CurrentTime = rtc.now();
-// if(CurrentTime.second() % UpdateRate == 0){
-  if(AverageTemp() < HigherTempLimit && AverageTemp() > LowerTempLimit)   DelayTime = UpdateRate;
-  else  DelayTime = 1;
-  if(millis() - PreviousMillis > (DelayTime * 1000 * 60)){
-    PreviousMillis = millis();
-//  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
-   if(IsUSBConnected()){
-     Serial.println(PackageLogData());
-     UpdateDataInSDCard();  
-    }
-    else{
-       LogDataToCard(PackageLogData());
-       Serial.println(F("Writing to Card"));
-    }
-  }
-//  CurrentTime = rtc.now();
-//  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
-//  //if(CurrentTime.second() % UpdateRate == 0){
-//  if(IsUSBConnected()){
-//    Serial.println(PackageLogData());
-//    UpdateDataInSDCard();  
-//  }
-//  else{
-//    LogDataToCard(PackageLogData());
-//    Serial.println(F("Writing to Card"));
-//  }
-//}
-}
-  ReadRFID();
-}
-
-void ReadRFID(){
-  if(mySerial.available()){
-  digitalWrite(Buzzer,HIGH);
-  delay(100);
-  digitalWrite(Buzzer,LOW);
-  wdt_reset();
-  InputDataString = mySerial.readString();
-//  bool AdminLoggedIn = true;
-//  if(!InputDataString.equals(Admin_ID_String))
-//    AdminLoggedIn = false;
-//  if(AdminLoggedIn){
-//    InputDataString = "admin       ";
-//    OpenDoor();
-//  }
-  InputDataString = InputDataString.substring(0,12);
-//  Serial.println(InputDataString);
-   Serial.println(PackageAccessData());
- InputDataString = "";
-}
-}
 
 void ProcessIncomingData(String IncomingData){
   //Serial.print("Data to Fridge: ");
@@ -215,17 +111,17 @@ float CorrectedTemperature1(){
   float Temperature;
   do{
       Temperature = ReadTemperature();
-      wdt_reset();
+//      wdt_reset();
     }while(Temperature < 0.0 || Temperature > 60.0);
   return Temperature;
 }
 
 float CorrectedTemperature2(){
   float Temperature;
-//  do{
+  do{
       Temperature = ReadTemperature1();
-      wdt_reset();
-//    }while(Temperature < 0.0 || Temperature > 60.0);
+//      wdt_reset();
+    }while(Temperature < 0.0 || Temperature > 60.0);
   return Temperature;
 }
 
@@ -233,9 +129,12 @@ String PackageAccessData(){
         String PrepareData;
         PrepareData = "#";
         PrepareData += DeviceName;
+        PrepareData += ",";
         PrepareData += InputDataString;
+        PrepareData += ",";
         InputDataString = "";
-        PrepareData += PackageCurrentTime_Access();
+        PrepareData += PackageCurrentTime();
+        PrepareData += ";";
         return PrepareData;
 }
 
@@ -252,6 +151,8 @@ String PackageCurrentTime(){
         CurrentTimeString += String(CurrentTime.minute(),DEC);
         if(CurrentTime.second() < 10)  CurrentTimeString += "0";
         CurrentTimeString += String(CurrentTime.second(),DEC);
+        //Serial.print("Current Time: ");
+        //Serial.println(CurrentTimeString);
         return CurrentTimeString;
 }
 
@@ -355,7 +256,7 @@ if(SD.exists("DataLog1.txt")){
 //        if(IsUSBConnected())
           Serial.println(PrepareData1);
           wdt_reset();
-          delay(20);
+          delay(1000);
         }
         myFile.close();
         SD.remove("DataLog1.txt");
@@ -408,10 +309,9 @@ void LogRFIDCard(String PrintToFile){
 }
 
 float AverageTemp(){    //Lets try this tomorrow!!
-  //return float((CorrectedTemperature1() + CorrectedTemperature2())/2.0F);
-  return CorrectedTemperature2();
+  return float((CorrectedTemperature1() + CorrectedTemperature2())/2.0F);
+  //return CorrectedTemperature1();
 }
-
 
 float ReadTemperature(){
   if ( !ds.search(addr)) {
@@ -565,3 +465,113 @@ void NotRegistered(){
   delay(1000);
   digitalWrite(Buzzer,LOW);
 }
+
+void ReadRFID(){
+  if (rfid.PICC_IsNewCardPresent()){
+  digitalWrite(Buzzer,HIGH);
+  delay(100);
+  digitalWrite(Buzzer,LOW);
+  wdt_reset();
+  String CurrentSwipe = "";
+  if (  rfid.PICC_ReadCardSerial()){
+  MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
+  CurrentSwipe += rfid.uid.uidByte[0];
+  CurrentSwipe += rfid.uid.uidByte[1];
+  CurrentSwipe += rfid.uid.uidByte[2];
+  CurrentSwipe += rfid.uid.uidByte[3];
+  rfid.PICC_HaltA();
+  rfid.PCD_StopCrypto1();
+  InputDataString = CurrentSwipe;
+  Serial.println(PackageAccessData());
+  InputDataString = "";
+}
+}
+}
+
+void setup(){
+    pinMode(Buzzer,OUTPUT);
+    pinMode(LockPin,OUTPUT);
+    pinMode(LimitSwitch,INPUT_PULLUP);
+    digitalWrite(Buzzer,HIGH);
+    delay(100);
+    digitalWrite(Buzzer,LOW);
+    Lock();
+
+    Serial.begin(1200);
+    delay(1000);  
+    if (! rtc.begin()) {
+      Serial.println("RCT Issue");
+    }
+
+    if (rtc.lostPower()) {
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+
+    delay(1000);
+    wdt_enable(WDTO_8S);
+//    Serial.println("Initializing RFID");
+//    pinMode(13,OUTPUT);
+//    digitalWrite(13,HIGH);    //This works when you Disable SD card in TecPharma Board
+//    SPI.begin(); // Init SPI bus
+//    rfid.PCD_Init(); // Init MFRC522 
+    
+    Serial.print("Initializing SD card...");                                                      
+   
+    pinMode(10, OUTPUT);                                                          // must initialize the hardware SS pin as output eventhough it is not using.
+    digitalWrite(31,HIGH);
+    digitalWrite(13,LOW);
+    delay(1000);
+    while(!SD.begin(13));                                                 // initialize the SD card 
+    delay(10);                                        // initialize the SD card 
+    Serial.println(F("card initialized."));
+    wdt_reset();
+    LoadSettings();
+    Serial.print(F("Update Rate: "));     Serial.println(UpdateRate);
+    Serial.print(F("High Temp Limit: ")); Serial.println(HigherTempLimit);
+    Serial.print(F("Low Temp Limit: ")); Serial.println(LowerTempLimit);
+    Lock();
+    wdt_reset();
+}
+
+void loop(){
+wdt_reset();
+i=0;
+//CurrentTime = rtc.now();
+//while(!rfid.PICC_IsNewCardPresent()){
+  Lock();
+  wdt_reset();
+ if(Serial.available())
+ ProcessIncomingData(Serial.readString());
+ CurrentTime = rtc.now();
+// if(CurrentTime.second() % UpdateRate == 0){
+  if(AverageTemp() < HigherTempLimit && AverageTemp() > LowerTempLimit)   DelayTime = UpdateRate;
+  else  DelayTime = 1;
+  if(millis() - PreviousMillis > (DelayTime * 1000 * 60)){
+    PreviousMillis = millis();
+//  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
+   if(IsUSBConnected()){
+     Serial.println(PackageLogData());
+     UpdateDataInSDCard();  
+    }
+    else{
+       LogDataToCard(PackageLogData());
+       Serial.println(F("Writing to Card"));
+    }
+  }
+//  CurrentTime = rtc.now();
+//  if(CurrentTime.minute() % UpdateRate == 0 && CurrentTime.second() == 0){
+//  //if(CurrentTime.second() % UpdateRate == 0){
+//  if(IsUSBConnected()){
+//    Serial.println(PackageLogData());
+//    UpdateDataInSDCard();  
+//  }
+//  else{
+//    LogDataToCard(PackageLogData());
+//    Serial.println(F("Writing to Card"));
+//  }
+//}
+//}
+//  ReadRFID();
+}
+
+
